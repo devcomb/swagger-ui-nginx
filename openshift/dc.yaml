@@ -1,71 +1,121 @@
-apiVersion: apps.openshift.io/v1
-kind: DeploymentConfig
-spec:
-  replicas: 0
-  selector:
-    name: nginx-example
-  strategy:
-    activeDeadlineSeconds: 21600
+apiVersion: v1
+kind: Template
+metadata:
+  name: swagger-ui-nginx
+objects:
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    annotations:
+      description: Keeps track of changes in the application image
+    name: ${NAME}
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: ${NAME}
+  spec:
+    nodeSelector: null
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${NAME}:latest
+    postCommit: {}
     resources: {}
-    rollingParams:
-      intervalSeconds: 1
-      maxSurge: 25%
-      maxUnavailable: 25%
-      timeoutSeconds: 600
-      updatePeriodSeconds: 1
-    type: Rolling
-  template:
-    metadata:
-      creationTimestamp: null
-      labels:
-        name: nginx-example
-      name: nginx-example
-    spec:
-      containers:
-          imagePullPolicy: IfNotPresent
-          livenessProbe:
-            failureThreshold: 3
-            httpGet:
-              path: /
-              port: 8080
-              scheme: HTTP
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 3
-          name: nginx-example
+    runPolicy: Serial
+    source:
+      git:
+        uri: ${SOURCE_REPOSITORY_URL}
+      type: Git
+    strategy:
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          name: 'nginx:1.12'
+          namespace: openshift
+      type: Source
+    triggers:
+      - type: ImageChange
+      - type: ConfigChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    annotations:
+      description: Defines how to deploy the application server
+      template.alpha.openshift.io/wait-for-ready: 'true'
+    name: ${NAME}
+  spec:
+    replicas: 1
+    selector:
+      name: ${NAME}
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          name: ${NAME}
+        name: ${NAME}
+      spec:
+        containers:
+        - name: ${NAME}
+          image: ' '
           ports:
-            - containerPort: 8080
-              protocol: TCP
-          readinessProbe:
-            failureThreshold: 3
-            httpGet:
-              path: /
-              port: 8080
-              scheme: HTTP
-            initialDelaySeconds: 3
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 3
+          - containerPort: 8080
           resources:
             limits:
-              cpu: 2m
-              memory: 100Mi
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-      dnsPolicy: ClusterFirst
-      restartPolicy: Always
-      schedulerName: default-scheduler
-      securityContext: {}
-      terminationGracePeriodSeconds: 30
-  test: false
-  triggers:
+              cpu: ${CPU_LIMIT}
+              memory: ${MEMORY_LIMIT}
+        volumes:
+        - name: proxy-tls
+          secret:
+            secretName: proxy-tls
+    triggers:
     - imageChangeParams:
         automatic: true
         containerNames:
-          - nginx-example
+        - ${NAME}
         from:
           kind: ImageStreamTag
-          name: 'nginx-example:latest'
+          name: ${NAME}:latest
       type: ImageChange
     - type: ConfigChange
+parameters:
+  - description: The name assigned to all of the frontend objects defined in this template.
+    displayName: Name
+    name: NAME
+    required: true
+    value: 'swagger-ui-nginx'
+  - description: The URL of the repository with your application source code.
+    displayName: Git Repository URL
+    name: SOURCE_REPOSITORY_URL
+    required: true
+    value: https://github.com/devcomb/swagger-ui-nginx.git
+  - description: Set this to a branch name, tag or other ref of your repository if you
+      are not using the default branch.
+    displayName: Git Reference
+    name: SOURCE_REPOSITORY_REF
+  - description: Maximum amount of memory the container can use.
+    displayName: Memory Limit
+    name: MEMORY_LIMIT
+    required: true
+    value: 100Mi
+  - description: Maximum amount of CPU the container can use.
+    displayName: CPU Limit
+    name: CPU_LIMIT
+    required: true
+    value: '2m'
+  - description: Github trigger secret.  A difficult to guess string encoded as part
+      of the webhook URL.  Not encrypted.
+    displayName: GitHub Webhook Secret
+    from: '[a-zA-Z0-9]{40}'
+    generate: expression
+    name: GITHUB_WEBHOOK_SECRET
+  - description: A secret string used to configure the Generic webhook.
+    displayName: Generic Webhook Secret
+    from: '[a-zA-Z0-9]{40}'
+    generate: expression
+    name: GENERIC_WEBHOOK_SECRET
+  - description: The custom NPM mirror URL
+    displayName: Custom NPM Mirror URL
+    name: NPM_MIRROR
+    value: ''
+    
