@@ -4,6 +4,36 @@ metadata:
   name: swagger-ui-nginx
 objects:
 - apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${NAME}
+  spec:
+    ports:
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      name: ${NAME}
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: ${NAME}
+  spec:
+    port:
+      targetPort: 8080-tcp
+    tls:
+      termination: edge
+    to:
+      kind: Service
+      name: ${NAME}
+      weight: 100
+    wildcardPolicy: None
+- apiVersion: v1
   kind: ImageStream
   metadata:
     annotations:
