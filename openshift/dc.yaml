@@ -94,10 +94,6 @@ objects:
             limits:
               cpu: ${CPU_LIMIT}
               memory: ${MEMORY_LIMIT}
-        volumes:
-        - name: proxy-tls
-          secret:
-            secretName: proxy-tls
     triggers:
     - imageChangeParams:
         automatic: true
